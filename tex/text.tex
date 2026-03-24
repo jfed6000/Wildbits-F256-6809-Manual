@@ -137,8 +137,8 @@ Whether text mode is being displayed (and in what resolution) is controlled by t
     \begin{center}
         \begin{tabular}{|c|c|c|c|c|c|c|c|c|c|} \hline
             Address & R/W & 7 & 6 & 5 & 4 & 3 & 2 & 1 & 0 \\ \hline\hline
-            \verb+0xFFC0+ & R/W & X & GAMMA & SPRITE & TILE & BITMAP & GRAPH & OVRLY & TEXT \\ \hline
-            \verb+0xFFC1+ & R/W & \multicolumn{2}{|c|}{---} & FON\_SET & FON\_OVLY & MON\_SLP & DBL\_Y & DBL\_X & CLK\_70 \\ \hline
+            \verb+0xFFC0+ & R/W & DIS\_VID & GAMMA & SPRITE & TILE & BITMAP & GRAPH & OVRLY & TEXT \\ \hline
+            \verb+0xFFC1+ & R/W & SHWBG & MTXT\_EN & FON\_SET & FON\_OVLY & MON\_SLP & DBL\_Y & DBL\_X & CLK\_70 \\ \hline
         \end{tabular}
     \end{center}
     \caption{VICKY Master Control Registers}
@@ -160,6 +160,8 @@ Whether text mode is being displayed (and in what resolution) is controlled by t
 
     \item[GAMMA] if set, gamma correction is enabled
 
+    \item[DIS\_VID] if set, disable video scanning, giving 100\% bandwitth to CPU      
+
     \item[CLK\_70] if set, the video refresh will be set to 70 Hz mode (640x400 text resolution, 320x200 graphics). If clear,
         the video refresh will be set to 60 Hz (640x480 text resolution, 320x240 graphics).
 
@@ -172,6 +174,10 @@ Whether text mode is being displayed (and in what resolution) is controlled by t
     \item[FON\_OVLY] if clear (0), only the text foreground color will be displayed when text overlays graphics (all background colors will be completely transparent). If set (1), both foreground and background colors will be displayed, except that background color 0 will be transparent. 
     
     \item[FON\_SET] if set (1), the text font displayed will be font set 1. If clear (0), the text font displayed will be font set 0.
+
+    \item[MTXT\_EN] if set, enable Memtext mode (prioritized over block text)
+
+    \item[SHWBG] if set, show background in non-overlay mode in MemText mode      
 \end{description}
 
 \section*{Text Fonts}
@@ -249,3 +255,175 @@ The glyph to display would be defined by the eight byte sequence 0x1F, 0x30, 0x3
     \caption{Text Cursor Flash Rates}
     \label{tab:txt_crsr_rates}
 \end{table}
+
+\section*{MemText}
+
+
+MemText mode features include: four 8x8 text fonts or two 8x16 text fonts, two foreground CLUTs and two background CLUTs of 256 colors each, and 256 colors per character.  MemText text mode keeps the text and color data in RAM, which allows the use of DMA to copy data and to switch text screen by changing the pointer values to a different value in memory.
+
+\begin{description}
+  \item[MemText Registers] located in block \$C0
+\end{description}
+\begin{table}[ht]
+    \begin{center}
+        \begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|} \hline
+            Address & R/W & Name & 7 & 6 & 5 & 4 & 3 & 2 & 1 & 0 \\\hline\hline
+            \verb+18x1200+ & R/W & MTCR & \multicolumn{6}{|c|}{---} & FSIZE & MTXT\_EN \\ \hline
+            \verb+18x1201+ & R/W & CCR & X & CSIZE & TF\_1 & TF\_0 & F\_ON & CF\_1 & CF\_0 & CURS\_EN  \\ \hline
+            \verb+18x1202+ & R/W & CURX & X7 & X6 & X5 & X4 & X3 & X2 & X1 & X0 \\ \hline
+            \verb+18x1203+ & R/W & CURY & Y7 & Y6 & Y5 & Y4 & Y3 & Y2 & Y1 & Y0 \\ \hline
+            \verb+18x1204+ & R/W & N/A & \multicolumn{8}{|c|}{NOT USED} \\ \hline            
+            \verb+18x1205+ & R/W & TXTH & T23 & T22 & T21 & T20 & T19 & T18 & T17 & T16 \\ \hline
+            \verb+18x1206+ & R/W & TXTM & T15 & T14 & T13 & T12 & T11 & T10 & T9 & T8 \\ \hline
+            \verb+18x1207+ & R/W & TXTK & T7 & T6 & T5 & T4 & T3 & T2 & T1 & T0 \\ \hline
+            \verb+18x1208+ & R/W & N/A & \multicolumn{8}{|c|}{NOT USED} \\ \hline
+            \verb+18x1209+ & R/W & COLH & C23 & C22 & C21 & C20 & C19 & C18 & C17 & C16 \\ \hline
+            \verb+18x120A+ & R/W & COLM & C15 & C14 & C13 & C12 & C11 & C10 & C9 & C8 \\ \hline
+            \verb+18x120B+ & R/W & COLL & C7 & C6 & C5 & C4 & C3 & C2 & C1 & C0 \\ \hline
+            \verb+18x120C+ & R/W & PRE & \multicolumn{8}{|c|}{Pre-Charge (Reserved)} \\ \hline
+            \verb+18x120D+ & R/W & CCB & \multicolumn{8}{|c|}{Cursor Color B} \\ \hline
+            \verb+18x120E+ & R/W & CCG & \multicolumn{8}{|c|}{Cursor Color G} \\ \hline
+            \verb+18x120F+ & R/W & CCR & \multicolumn{8}{|c|}{Cursor Color R} \\ \hline
+            \verb+18x1210+ & R/W & CG8 & \multicolumn{8}{|c|}{Cursor Graphic x8} \\ \hline
+            \verb+18x1211+ & R/W & CG8 & \multicolumn{8}{|c|}{Cursor Graphic x8} \\ \hline
+            \verb+18x1212+ & R/W & CG8 & \multicolumn{8}{|c|}{Cursor Graphic x8} \\ \hline
+            \verb+18x1213+ & R/W & CG8 & \multicolumn{8}{|c|}{Cursor Graphic x8} \\ \hline
+            \verb+18x1214+ & R/W & CG8 & \multicolumn{8}{|c|}{Cursor Graphic x8} \\ \hline
+            \verb+18x1215+ & R/W & CG8 & \multicolumn{8}{|c|}{Cursor Graphic x8} \\ \hline
+            \verb+18x1216+ & R/W & CG8 & \multicolumn{8}{|c|}{Cursor Graphic x8} \\ \hline
+            \verb+18x1217+ & R/W & CG8 & \multicolumn{8}{|c|}{Cursor Graphic x8} \\ \hline
+            \verb+18x1218+ & R/W & CG16 & \multicolumn{8}{|c|}{Cursor Graphic x16} \\ \hline
+            \verb+18x1219+ & R/W & CG16 & \multicolumn{8}{|c|}{Cursor Graphic x16} \\ \hline
+            \verb+18x121A+ & R/W & CG16 & \multicolumn{8}{|c|}{Cursor Graphic x16} \\ \hline
+            \verb+18x121B+ & R/W & CG16 & \multicolumn{8}{|c|}{Cursor Graphic x16} \\ \hline
+            \verb+18x121C+ & R/W & CG16 & \multicolumn{8}{|c|}{Cursor Graphic x16} \\ \hline
+            \verb+18x121D+ & R/W & CG16 & \multicolumn{8}{|c|}{Cursor Graphic x16} \\ \hline
+            \verb+18x121E+ & R/W & CG16 & \multicolumn{8}{|c|}{Cursor Graphic x16} \\ \hline
+            \verb+18x121F+ & R/W & CG16 & \multicolumn{8}{|c|}{Cursor Graphic x16} \\ \hline
+        \end{tabular}
+    \end{center}
+    \caption{MemText Registers}
+    \label{tab:memtext_reg}
+\end{table}
+
+Screen resolutions are 80x60 for 8x8 fonts and 80x30 for 8x16 fonts.  The double pixel registers do not affect MemText mode.
+
+\begin{description}
+  \begin{samepage}
+    \item[MTCR] Memory Text Control Register
+      \begin{description}
+      \item[MTXT\_EN] 1=enabled, 0=disabled
+      \item[FSIZE] Font Size: 0=8x8, 1=8x16 (State-Machine)      
+      \end{description}
+  \end{samepage}
+    \item[CCR] Cursor Control Register
+      \begin{description}
+      \item[CURS\_EN] 1=enabled, 0=disabled
+      \item[CF\_0] Cursor Flashing Rate 0
+      \item[CF\_1] Cursor Flashing Rate 1
+      \item[F\_ON] Cursor Flashing on/off
+      \item[TF\_0] Text Flashing Rate 0 (triggered by attributes)
+      \item[TF\_1] Text Flashing Rate 1 (triggered by attributes)
+      \item[CSIZE]  Cursor Size: 0=8x8, 1=8x16
+        \begin{table}[ht]
+    \begin{center}
+        \begin{tabular}{|c|c|c|} \hline
+            RATE1 & RATE0 & Rate \\\hline\hline
+            0 & 0 & 1bps \\ \hline
+            0 & 1 & 2bps \\ \hline
+            1 & 0 & 3bps \\ \hline
+            1 & 1 & 5bps \\ \hline
+        \end{tabular}
+    \end{center}
+    \caption{Text Cursor Flash Rates}
+    \label{tab:mtext_crsr_rates}
+\end{table}
+      \end{description}
+
+    \item[CURX] Cursor X Register
+
+    \item[CURY] Cursor Y Register
+
+    \item[TXTH] Text Address Pointer H
+      
+    \item[TXTM] Text Address Pointer M
+
+    \item[TXTL] Text Address Pointer L
+
+    \item[COLH] Color Address Pointer H
+
+    \item[COLM] Color Address Pointer M
+
+    \item[COLL] Color Address Pointer L
+
+    \item[PRE] Pre-Charge (Reserved - defaulted to \$0A)
+
+    \item[CCB] Cursor Color B
+
+    \item[CCG] Cursor Color R
+
+    \item[CCR] Cursor color R
+
+    \item[CG8] Cursor Graphics x8
+
+    \item[CG16] Cursor Graphics x16    
+\end{description}
+
+\section*{MemText Foreground/Background LUTs}
+
+The foreground and background LUTs consist of 256 colors in BGRA format.  Each LUT is 1K.
+
+\begin{table}[ht]
+    \begin{center}
+        \begin{tabular}{|c|c|c|c|c|} \hline
+          Block & Offset & Address Start & Address End & Description \\\hline\hline
+          \$C5 & \verb+0x0000+ & \verb+18xA000+ & \verb+18xA3FF+ & MEMTEXT FOREGROUND - LUT0 \\ \hline
+          \$C5 & \verb+0x0400+ & \verb+18xA400+ & \verb+18xA7FF+ & MEMTEXT FOREGROUND - LUT0 \\ \hline
+          \$C5 & \verb+0x0800+ & \verb+18xA800+ & \verb+18xABFF+ & MEMTEXT FOREGROUND - LUT0 \\ \hline
+          \$C5 & \verb+0x0C00+ & \verb+18xAC00+ & \verb+18xAFFF+ & MEMTEXT FOREGROUND - LUT0 \\ \hline
+       \end{tabular}
+    \end{center}
+    \caption{MemText Foreground/Background LUTS}
+    \label{tab:memtext_fgbglut}
+\end{table}
+
+\section*{MemText Fonts}
+
+\begin{table}[ht]
+    \begin{center}
+        \begin{tabular}{|c|c|c|c|c|} \hline
+          Block & Offset & Address Start & Address End & Description \\\hline\hline
+          \$C6 & \verb+0x0000+ & \verb+18xC000+ & \verb+18xDFFF+ & MEMTEXT FONT (2x8x16),(4x8x8) \\ \hline
+        \end{tabular}
+    \end{center}
+    \caption{MemText Registers}
+    \label{tab:memtext_fonts}
+\end{table}
+
+\section*{MemText Attributes}
+
+The text memory for MemText is 2 bytes per character.  The first byte is the character, the second byte contains the attributes.
+
+\begin{table}[ht]
+    \begin{center}
+        \begin{tabular}{|c|c|c|c|c|c|c|c|c|} \hline
+          Character &  \multicolumn{8}{|c|}{Attributes} \\\hline\hline 
+          7:0 & 7 & 6 & 5 & 4 & 3 & 2 & 1 & 0 \\ \hline 
+          Character & X & X & FL\_EN & INV & BGLUT & FGLUT & FSEL1 & FSEL0 \\ \hline 
+          
+        \end{tabular}
+    \end{center}
+    \caption{MemText Registers}
+    \label{tab:memtext_characters}
+\end{table}
+
+\begin{description}
+    \item[FSEL1 and FSEL0] selects the font bank.  If 8x16 font, then only FSEL0 is used to select one of two font banks.  For 8x8, FSEL0 and FSEL1 are used to select one of four font banks
+
+    \item[FGLUT] select foreground LUT0 or LUT1
+
+    \item[INV] inverse character
+
+    \item[FL\_EN] 1=enable flashing, 0=disable flashing
+
+\end{description}
