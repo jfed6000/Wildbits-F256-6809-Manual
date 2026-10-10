@@ -30,6 +30,16 @@
 \newcommand{\jr}{F256}
 \newcommand{\fjr}{F256jr}
 \newcommand{\fk}{F256k}
+\newcommand{\jrtwo}{Jr2}
+\newcommand{\ktwo}{K2}
+% \verify{text} marks a fact not yet checked against the RTL. Draft builds show
+% it in red; a release build (pdflatex "\def\releasebuild{}\input{f256jr_6809_ref}")
+% stops with an error at the first one left.
+\ifdefined\releasebuild
+    \newcommand{\verify}[1]{\errmessage{Unverified text left in a release build: #1}#1}
+\else
+    \newcommand{\verify}[1]{\textcolor{red}{#1}}
+\fi
 \newcommand{\microsec}{$\mu$s}
 \newcommand{\example}[1]{\subsection*{Example: #1}}
 \begin{document}
