@@ -1,9 +1,11 @@
-This project is for managing the documentation for the Foenix F256jr 8-bit computer.
+This project is for managing the documentation for the Wildbits F256 8-bit computer with the 6809 CPU.
 
-* [PDF](tex/f256jr_ref.pdf)
+* [PDF](tex/f256jr_6809_ref.pdf)
 * [Examples](examples)
+* [Wildbits Computing](https://wildbitscomputing.com)
+* [F256 Wiki](https://f256wiki.wildbitscomputing.com)
 
-This project is for the reference manual for the F256jr. When finished, it will contain a full user's manual and example code.
+This project is for the Wildbits F256 6809 Reference Manual. It is derived from the Foenix F256 Reference Manual by Peter Weingartner; the last Foenix version is tagged `foenix-final`.
 
 Shield: [![CC BY-SA 4.0][cc-by-sa-shield]][cc-by-sa]
 
