@@ -8,3 +8,5 @@ docs/*.docx
 *.out
 *.toc
 .DS_Store
+examples/raw/*.bin
+examples/raw/*.lst

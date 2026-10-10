@@ -52,3 +52,7 @@ Networking (WizFi360, W6100), VS1053b and MIDI, K2 RP2040 supervisor, HDMI I2C a
 ## Findings
 
 Differences between the site, the RTL and the old manual go here as they turn up.
+
+- **F1 Loading raw programs (2026-10-10, from the RTL):** FoenixMgr `--boot ram` sends debug command $90, which makes the MMU reset slot 7 of LUT 0 to RAM block 7 instead of flash block $7F (`TyVKy2K2x1_MMU_Register.v`, `DebugModuleK2.v`/`DebugModuleJr.v`). It persists until a full system reset or `--boot flash`. Entering debug mode holds the CPU in reset; leaving it resets the CPU and MMU, so an upload restarts the CPU. With `$FFA1` bit 1 clear, the vectors at `$FFF0-$FFFF` come from the mapped block, so a raw program supplies its own reset vector at physical `$00FFFE`. Run `--boot ram` before uploading: the other order lets the flash boot run first, and it overwrites block 7.
+- **F2 Reset state (RTL):** all interrupt sources masked, nothing pending, all edge-triggered (`IRQ_Controller_Jr.v`). `$FFC0` = $01 (text on), `$FFC1` = $00, border on at 16x16 and black (`TinyVickyControl_Registers.v`). The text color LUTs are loaded with the OS-9 palette at power-up.
+- **F3 lwasm wrapper:** the `lwasm` in coco-shelf is a wrapper that always writes `.map`/`.list` files to the current directory. Stock lwtools does not do this. The examples' makefile takes `LWASM=` to choose which one runs.
