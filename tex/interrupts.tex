@@ -1,249 +1,125 @@
 \chapter{Interrupt Controller}
 \label{chap:interrupts}
 
-The Motorola 6809 has three hardware interrupts: the non-maskable interrupt (NMI) for high-priority events, the fast interrupt request (FIRQ) for time-critical tasks, and the regular interrupt request (IRQ) for normal-priority events. Currently, the \jr\ series of computers do not use NMI or FIRQ for any purpose, so the primary interrupt is IRQ. Multiple devices on the \jr\ can trigger interrupts, and to relieve the interrupt handler from querying each device individually, the \jr\ provides an interrupt controller module.
+The 6809 has three interrupt inputs: IRQ, FIRQ and NMI. On the \jrtwo\ and \ktwo\ nearly every device interrupts through IRQ. FIRQ isn't connected, and NMI comes only from the IEC port, when you ask for it (section~\ref{sec:int_nmi}).
 
-The individual devices route their interrupt request signals to the interrupt controller. When an interrupt comes in, the controller knows which device it is and decides whether to forward the interrupt to the CPU. The interrupt handler can then query the interrupt handler to see which device or devices have interrupts pending and can then acknowledge them once they have been properly handled.
+Many devices share the one IRQ line, so an interrupt controller sits between them and the CPU. It records which devices have raised an interrupt, lets you choose which of them reach the CPU, and lets your handler find the cause without polling every device.
 
-Each interrupt that the interrupt controller manages belongs to one of four separate groups. Each group manages at most eight interrupts, and each interrupt within that group has its own bit within the group. That bit is used in the four registers that control the interrupts for that group (see table \ref{tab:int_reg}). The four different registers for each group are:
+If you write programs for NitrOS-9, the system and its drivers own the interrupt controller; read section~\ref{sec:int_nos9}. If you write raw 6809 programs, you set it up yourself.
+
+\section{Groups and registers}
+
+The controller handles up to 32 sources in four groups of eight. Each group has four registers, and each source has the same bit position in all four:
 
 \begin{description}
-    \item[PENDING] In this register, there are eight flags, one for each interrupt in the group. When reading the register, if the flag is set, the interrupt controller has received that interrupt. When writing to the register, setting a flag will clear the pending status of the interrupt.
-    \item[POLARITY] This register, together with EDGE, controls how the interrupt controller interprets the inputs to recognize an interrupt condition (see table \ref{tab:int_pol_edge}).
-    \item[EDGE] This register, together with POLARITY, controls how the interrupt controller interprets the inputs to recognize an interrupt condition (see table \ref{tab:int_pol_edge}).
-    \item[MASK] This register controls whether interrupts asserted by the devices will trigger an IRQ. If an interrupt's flag is set in the MASK register, then the interrupt will be ignored. If the flag is clear, the interrupt being asserted by the device will trigger an IRQ on the processor.
+    \item[PENDING] reads 1 for each source that has raised an interrupt. Write 1 to a bit to clear it; writing 0 leaves it alone, so you can clear one source without touching the others.
+    \item[MASK] decides which pending flags interrupt the CPU. A masked source (1) still sets its pending flag, but doesn't interrupt; an unmasked source (0) does.
+    \item[EDGE] and \textbf{POLARITY} decide what sets the pending flag (table~\ref{tab:int_pol_edge}).
 \end{description}
 
-\begin{table}[ht]
-	\begin{center}
-		\begin{tabular}{|c|c|c|} \hline
-            Group & Address & Name \\ \hline\hline
-            \multirow{4}{*}{0} & 0xFE20 & INT\_PENDING\_0 \\ \cline{2-3}
-                               & 0xFE24 & INT\_POLARITY\_0 \\ \cline{2-3}
-                               & 0xFE28 & INT\_EDGE\_0 \\ \cline{2-3}
-                               & 0xFE2C & INT\_MASK\_0 \\ \hline\hline
+The controller holds IRQ low while any pending flag is set and unmasked. Your handler must clear the pending flags it services, or the CPU takes the interrupt again as soon as it returns.
 
-            \multirow{4}{*}{1} & 0xFE21 & INT\_PENDING\_1 \\ \cline{2-3}
-                               & 0xFE25 & INT\_POLARITY\_1 \\ \cline{2-3}
-                               & 0xFE29 & INT\_EDGE\_1 \\ \cline{2-3}
-                               & 0xFE2D & INT\_MASK\_1 \\ \hline\hline
+Table~\ref{tab:int_reg} shows the registers and the source of each bit, and the list after it describes them. The \ktwo\ has three sources the \jrtwo\ lacks: VIA 1 for the built-in keyboard, the optical keyboard and the WizNet FIFO. On the \jrtwo\ those bits never become pending.
 
-            \multirow{4}{*}{2} & 0xFE22 & INT\_PENDING\_2 \\ \cline{2-3}
-                               & 0xFE26 & INT\_POLARITY\_2 \\ \cline{2-3}
-                               & 0xFE2A & INT\_EDGE\_2 \\ \cline{2-3}
-                               & 0xFE2E & INT\_MASK\_2 \\ \hline
-            \multirow{4}{*}{3} & 0xFE23 & INT\_PENDING\_2 \\ \cline{2-3}
-                               & 0xFE27 & INT\_POLARITY\_2 \\ \cline{2-3}
-                               & 0xFE2B & INT\_EDGE\_2 \\ \cline{2-3}
-                               & 0xFE2F & INT\_MASK\_2 \\ \hline
-        \end{tabular}
-    \end{center}
-	\caption{Interrupt Registers}
-	\label{tab:int_reg}
-\end{table}
+\input{gen/interrupts.tex}
+\input{gen/interrupts_fields.tex}
 
-The interrupt controller registers are divided on the \jr\ into four groups: 0, 1, 2, and 3. Group 0 represents seven of the interrupts: two video interrupts, two PS/2 controller interrupts, two timer interrupts, and the DMA interrupt. Group 1 represents the other interrupts: UART, real time clock, VIA, and the SD card controller. Group 2 represents interrupts used by the IEC serial port, and the copper network chip and WIFI external module on the F256K2. Group 3 represents interrupts for the WIFI, MIDI, optical keyboard (K2 only), WS6100 FIFI Rx (K2 only) and VS1053B.  See tables \ref{tab:int_group_0}, \ref{tab:int_group_1}, and \ref{tab:int_group_2} to see how device interrupts are assigned to their groups.
+\begin{note}
+    Some devices have an interrupt enable of their own as well, such as the VIAs, the DMA engine and the line interrupt. Such a device interrupts the CPU only when you enable it in the device and unmask it in the controller.
+\end{note}
 
-NOTE: Some devices on the \jr\ have their own interrupt enable flags (separate from the mask flags). For example, the 65C22 VIA has an interrupt enable bit in one of its registers and will not send an interrupt to the \jr's interrupt controller if that bit is not enabled. For such devices, the interrupt enable flag on the device must be set and the corresponding mask bit in the interrupt controller must be clear in order for interrupts to be sent to the CPU. Other devices, like VICKY, do not have a separate enable flag. In their case, only their corresponding mask bits must be cleared to enable their interrupts.
+\subsection*{Edge and polarity}
 
 \begin{table}[ht]
-	\begin{center}
-		\begin{tabular}{|c|c|l|} \hline
-            Bit & Name & Purpose \\ \hline\hline
-            \verb+0x01+ & INT\_VKY\_SOF & TinyVicky Start Of Frame interrupt. \\ \hline
-            \verb+0x02+ & INT\_VKY\_SOL & TinyVicky Start Of Line interrupt \\ \hline
-            \verb+0x04+ & INT\_PS2\_KBD & PS/2 keyboard event \\ \hline
-            \verb+0x08+ & INT\_PS2\_MOUSE & PS/2 mouse event \\ \hline
-            \verb+0x10+ & INT\_TIMER\_0 & TIMER0 has reached its target value \\ \hline
-            \verb+0x20+ & INT\_TIMER\_1 & TIMER1 has reached its target value \\ \hline
-            \verb+0x40+ & INT\_DMA0  \\ \hline
-            \verb+0x80+ & Cartridge & Interrupt asserted by the cartidge \\ \hline
+    \begin{center}
+        \begin{tabular}{|c|c|l|} \hline
+            EDGE & POLARITY & The pending flag is set \\ \hline\hline
+            0 & 0 & while the input is low \\ \hline
+            0 & 1 & while the input is high \\ \hline
+            1 & 0 & when the input goes from high to low \\ \hline
+            1 & 1 & when the input goes from low to high \\ \hline
         \end{tabular}
     \end{center}
-	\caption{Interrupt Group 0 Bit Assignments}
-	\label{tab:int_group_0}
+    \caption{Interrupt polarity and edge}
+    \label{tab:int_pol_edge}
 \end{table}
 
-\begin{table}[ht]
-	\begin{center}
-		\begin{tabular}{|c|c|l|} \hline
-            Bit & Name & Purpose \\ \hline\hline
-            \verb+0x01+ & INT\_UART & The UART is ready to receive or send data \\ \hline
-            \verb+0x02+ & RESERVED & \\ \hline
-            \verb+0x04+ & RESERVED & \\ \hline
-            \verb+0x08+ & RESERVED & \\ \hline
-            \verb+0x10+ & INT\_RTC & Event from the real time clock chip \\ \hline
-            \verb+0x20+ & INT\_VIA0 & Event from the 65C22 VIA chip \\ \hline
-            \verb+0x40+ & INT\_VIA1 & \fk\ Only: Local keyboard \\ \hline
-            \verb+0x80+ & INT\_SDC\_INS & User has inserted an SD card \\ \hline
-        \end{tabular}
-    \end{center}
-	\caption{Interrupt Group 1 Bit Assignments}
-	\label{tab:int_group_1}
-\end{table}
+After reset every source is edge-triggered on a falling edge (EDGE \verb+$FF+, POLARITY \verb+$00+). That suits all the device sources, and NitrOS-9 never changes it. With a level setting, the flag is set again as long as the input stays at that level, even straight after you clear it. The edge and polarity registers matter mainly for the IEC lines in group 2, where you may want to catch a particular change on the bus.
 
-\begin{table}[ht]
-	\begin{center}
-		\begin{tabular}{|c|c|l|} \hline
-            Bit & Name & Purpose \\ \hline\hline
-            \verb+0x01+ & IEC\_DATA\_i & IEC Data In \\ \hline
-            \verb+0x02+ & IEC\_CLK\_i & IEC Clock In  \\ \hline
-            \verb+0x04+ & IEC\_ATN\_i & IEC ATN In  \\ \hline
-            \verb+0x08+ & IEC\_SREQ\_i & IEC SREQ In  \\ \hline
-            \verb+0x10+ & INT\_COP & Copper Network Chip IRQn  \\ \hline
-            \verb+0x20+ & INT\_WIFI\_EXT & WIFI External Module IRQn \\ \hline
-            \verb+0x40+ & RESERVED & \\ \hline
-            \verb+0x80+ & RESERVED & \\ \hline
-        \end{tabular}
-    \end{center}
-	\caption{Interrupt Group 2 Bit Assignment}
-	\label{tab:int_group_2}
-\end{table}
+\subsection*{Start of frame and start of line}
 
-\begin{table}[ht]
-	\begin{center}
-		\begin{tabular}{|c|c|l|} \hline
-            Bit & Name & Purpose \\ \hline\hline
-            \verb+0x01+ & INT\_WIFI & FIFO Rx WIFI IRQ \\ \hline
-            \verb+0x02+ & IEC\_MIDI & FIFO Rx MIDI IRQ  \\ \hline
-            \verb+0x04+ & IEC\_OPT\_KBD & K2 Optical Keyboard IRQ  \\ \hline
-            \verb+0x08+ & IEC\_WS6100 & WS6100 FIFO Rx IRQ  \\ \hline
-            \verb+0x10+ & INT\_VS1053B & FIFO Rx VS1053B  \\ \hline
-            \verb+0x20+ & RESERVED & \\ \hline
-            \verb+0x40+ & RESERVED & \\ \hline
-            \verb+0x80+ & RESERVED & \\ \hline
-        \end{tabular}
-    \end{center}
-	\caption{Interrupt Group 3 Bit Assignment}
-	\label{tab:int_group_3}
-\end{table}
+VICKY raises the start-of-frame interrupt (SOF) once per frame, when it has drawn the last visible line, which makes it the right moment to move sprites or change colors without tearing. It also makes a steady clock: \verify{60 times a second in the 640×480 modes}.
 
-The Start Of Frame (SOF) and Start of Line (SOL) interrupts could use some further explanation. The SOF interrupt is raised at the beginning of the vertical blanking period, when the raster has reached the bottom of the screen and starts to return to the top. This interrupt is raised either 60 times a second or 70 times a second, depending on the value of CLK\_70 (see table~\ref{tab:vky_master_ctrl_reg}), which sets the base resolution of the screen. The SOF interrupt is good for timing updates to graphics (like placement of sprites) to avoid screen tearing. It can also be used for rough timing of events, provided the code takes into account the fact that the timing changes with screen resolution. The Start of Line interrupt is raised when the raster line has reached a target line (see table~\ref{tab:lint_reg}). When the interrupt is raised, the raster is in the process of drawing the screen and has reached the desired target line.
+The start-of-line interrupt (SOL) happens when the display reaches a line you choose. Set the line and enable the interrupt in VICKY's line interrupt registers (table~\ref{tab:lint_reg}); then unmask INT\_VKY\_SOL.
 
-As an example of working with the interrupt controller, let's try using the SOF interrupt to alter the character in the upper left corner.
+\section{Reset state}
 
-To start, we will need to install our interrupt handler to respond to IRQs. For this example, we're going to completely take over interrupt processing, so we'll do some things we wouldn't ordinarily do. Also, since an interrupt could come in while we're setting things, up, we need to be careful about how we do things.
+At power-up and reset the controller masks every source, clears every pending flag, and sets every source to falling-edge triggering. The 6809 itself starts with IRQ and FIRQ masked in its condition code register.
 
-\begin{enumerate}
-    \item First, we want to disable IRQs at the CPU level.
-    \item Then we set the interrupt vector.
-    \item Next, we want to mask off all but the SOF interrupt, since that is the only one we will process (in real programs, we will either need to handle several interrupts or play nicely with the operating system).
-    \item Now, there might be interrupts that came in earlier, so we will just clear all the pending interrupt flags to ensure the program starts cleanly.
-    \item Finally, we enable CPU interrupt handling again and loop forever... processing the SOF interrupt when it comes in.
-\end{enumerate}
+Unmask a source only after you have installed its handler and cleared its pending flag; a flag left over from before can otherwise interrupt at once.
+
+\section{NMI from the IEC port}
+\label{sec:int_nmi}
+
+Bit 5 of the IEC output register (\verb+$FE81+) routes the IEC interrupts to NMI as well. While the bit is set, any unmasked pending IEC flag (group 2, bits 0--3) pulls NMI low as well as IRQ. While it is clear, the IEC flags use IRQ only. No other source can raise NMI. \verify{The bit is clear after reset.}
+
+The 6809 ignores NMI until your program has loaded S for the first time. NMI can't be masked in the CPU, so mask the IEC sources in INT\_MASK\_2 when you don't want it.
+
+\section{Raw 6809 example: the start-of-frame interrupt}
+
+This example counts frames in the top left character of the screen. It builds on the raw skeleton in \verb+examples/raw/skeleton.asm+, which already masks and clears every interrupt and puts the 6809 vectors at the end of its image. It uses the names in \verb+examples/include/wildbits_regs.inc+, plus \verb+INT_VKY_SOF equ $01+.
+
+The handler maps the text screen (block \verb+$FE+) into slot 5 to change the character, then puts slot 5 back. The 6809 saves every register when it takes an IRQ, so the handler needs to save only the slot it changes.
 
 \begin{verbatim}
-VIRQ = $FFFE
-
-INT_PEND_0 = $D660  ; Pending register for interrupts 0 - 7
-INT_PEND_1 = $D661  ; Pending register for interrupts 8 - 15
-INT_MASK_0 = $D66C  ; Mask register for interrupts 0 - 7
-INT_MASK_1 = $D66D  ; Mask register for interrupts 8 - 15
-
-start:      ; Disable IRQ handling
-            sei
-
-            ; Load my IRQ handler into the IRQ vector
-            ; NOTE: this code just takes over IRQs completely. It could save
-            ;       the pointer to the old handler and chain to it when it has
-            ;       handled its interrupt. But what is proper really depends on
-            ;       what the program is trying to do.
-            lda #<my_handler
-            sta VIRQ
-            lda #>my_handler
-            sta VIRQ+1
-
-            ; Mask off all but the SOF interrupt
-            lda #$ff
-            sta INT_MASK_1
-            and #~INT00_VKY_SOF
-            sta INT_MASK_0
-
-            ; Clear all pending interrupts
-            lda #$ff
-            sta INT_PEND_0
-            sta INT_PEND_1
-
-            ; Put a character in the upper right of the screen
-            lda #SYS_CTRL_TEXT_PG
-            sta SYS_CTRL_1
-
-            lda #'@'
-            sta $c000
-
-            ; Set the color of the character
-            lda #SYS_CTRL_COLOR_PG
-            sta SYS_CTRL_1
-
-            lda #$F0
-            sta $c000
-
-            ; Go back to I/O page 0
-            stz SYS_CTRL_1
-
-            ; Make sure we're in text mode
-            lda #$01            ; enable TEXT
-            sta $D000           ; Save that to VICKY master control register 0
-            stz $D001
-
-            ; Re-enable IRQ handling
-            cli
+IrqHandler  lda   #INT_VKY_SOF
+            bita  INT_PENDING_0     is SOF pending?
+            beq   @done
+            sta   INT_PENDING_0     yes: clear it
+            lda   MMU_SLOT_5        save slot 5 ($A000-$BFFF)
+            pshs  a
+            lda   #$FE              text screen block
+            sta   MMU_SLOT_5
+            inc   $A000             the character at row 0, column 0
+            puls  a
+            sta   MMU_SLOT_5        put slot 5 back
+@done       rti
 \end{verbatim}
 
-To actually process the interrupt, we need to read and then increment the character at the start of the screen, clear the pending flag for the SOF interrupt, and then return. However, the screen and the interrupt control registers are in different I/O banks, so we'll need to change the I/O bank a couple of times during interrupt processing. So, the first thing we will do is to save the value of the system control register at 0x0001, so we can restore it before we return from the interrupt.
+Point the IRQ vector at the handler in the skeleton's vector table (\verb+fdb IrqHandler+ at \verb+$FFF8+), and turn the interrupt on in your setup code:
 
 \begin{verbatim}
-SYS_CTRL_1 = $0001
-SYS_CTRL_TEXT_PG = $02
-
-my_handler: pha
-
-            ; Save the system control register
-            lda SYS_CTRL_1
-            pha
-
-            ; Switch to I/O page 0
-            stz SYS_CTRL_1
-
-            ; Check for SOF flag
-            lda #INT00_VKY_SOF
-            bit INT_PEND_0
-            beq return              ; If it's zero, exit the handler
-
-            ; Yes: clear the flag for SOF
-            sta INT_PEND_0
-
-            ; Move to the text screen page
-            lda #SYS_CTRL_TEXT_PG
-            sta SYS_CTRL_1
-
-            ; Increment the character at position 0
-            inc $c000
-
-            ; Restore the system control register
-return:     pla
-            sta SYS_CTRL_1
-
-            ; Return to the original code
-            pla
-            rti
+            orcc  #$10              hold off IRQs while we set up
+            lda   #INT_VKY_SOF
+            sta   INT_PENDING_0     clear any old SOF
+            lda   INT_MASK_0
+            anda  #~INT_VKY_SOF     unmask SOF only
+            sta   INT_MASK_0
+            andcc #~$10             let IRQs in
 \end{verbatim}
 
-\subsection*{Polarity and Edge Controls}
-The POLARITY and EDGE registers work together to control how the interrupt controller recognizes an interrupt condition from the input signal. The EDGE register controls if the interrupt is triggered by the transition of the signal between high and low, and POLARITY controls which direction or logic level is the triggering condition. Table \ref{tab:int_pol_edge} lists how the two work together to choose the specific condition.
+The handler reads \verb+MMU_SLOT_5+ to save it; that read returns the LUT selected by EDIT\_LUT, so this example assumes EDIT\_LUT and ACT\_LUT are the same, as after reset.
 
-For groups 0 and 1, these registers are really not needed, and they should be left in their default settings. For group 2, these registers will be more useful for recognizing changes to the IEC input lines.
+\section{Under NitrOS-9}
+\label{sec:int_nos9}
 
-\begin{table}[ht]
-	\begin{center}
-		\begin{tabular}{|c|c|l|} \hline
-            EDGE & POLARITY & Function \\\hline\hline
-            0    & 0        & Interrupt is triggered if input line is LOW \\\hline
-            0    & 1        & Interrupt is triggered if input line is HIGH \\\hline
-            1    & 0        & Interrupt is triggered when the input transitions from HIGH to LOW \\\hline
-            1    & 1        & Interrupt is triggered when the input transitions from LOW to HIGH \\\hline
-        \end{tabular}
-    \end{center}
-	\caption{Interrupt Polarity and Edge Function}
-	\label{tab:int_pol_edge}
-\end{table}
+When NitrOS-9 starts, it masks every source and clears every pending flag. Each driver then unmasks the sources it handles, changing only its own bits with a read-modify-write.
+
+Interrupts belong to device drivers. A driver installs its handler with \verb+F$IRQ+, giving the address of the pending register (\verb+INT_PENDING_0+ to \verb+INT_PENDING_3+) and a packet with a flip byte, a mask byte for its source, and a priority. When an IRQ arrives, NitrOS-9 checks each installed handler's pending register against its mask and calls the handlers whose bits are set. The handler clears its pending flag and returns. This is how the start-of-line driver installs its handler:
+
+\begin{verbatim}
+            ldd   #INT_PENDING_0    the register to check
+            leax  SOL_Pckt,pcr      flip, mask and priority
+            leay  SOL_IRQSvc,pcr    the handler
+            os9   F$IRQ
+            ...
+            lda   INT_MASK_0        unmask SOL, keeping the other bits
+            anda  #^INT_VKY_SOL
+            sta   INT_MASK_0
+
+SOL_Pckt    fcb   %00000000         flip byte
+            fcb   INT_VKY_SOL       mask byte
+            fcb   $F1               priority
+\end{verbatim}
+
+A program doesn't handle interrupts itself. It asks a driver to send it a signal when the event happens, and handles the signal with an intercept routine (\verb+F$Icpt+). For example, the \verb+SS.SOLIRQ+ SetStat asks the start-of-line driver to signal your process when the display reaches a given line. Don't write the interrupt controller's registers from a program: you would take sources away from the drivers that own them.

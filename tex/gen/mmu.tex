@@ -4,9 +4,9 @@
         \setlength{\tabcolsep}{3pt}
         \begin{tabular}{|c|l|BBBBBBBB} \hline
             Address & Name & 7 & 6 & 5 & 4 & 3 & 2 & 1 & 0 \\ \hline\hline
-            \verb+$FFA0+ & MMU\_MEM\_CTRL & \bitspan{2}{---} & \bitspan{2}{EDIT\_\allowbreak{}LUT} & \bitspan{2}{---} & \bitspan{2}{ACT\_\allowbreak{}LUT} \\ \hline
-            \verb+$FFA1+ & MMU\_IO\_CTRL & \bitspan{1}{FLASHDIS\_\allowbreak{}OK} & \bitspan{4}{---} & \bitspan{1}{FLASHDIS} & \bitspan{1}{VEC\_\allowbreak{}RAM} & \bitspan{1}{CONST\_\allowbreak{}RAM} \\ \hline
-            \verb+$FFA8+--\verb+$FFAF+ & MMU\_SLOT\_0 & \bitspan{8}{Block number} \\ \hline
+            \verb+$FFA0+ & MMU\_\allowbreak{}MEM\_\allowbreak{}CTRL & \bitspan{2}{---} & \bitspan{2}{EDIT\_\allowbreak{}LUT} & \bitspan{2}{---} & \bitspan{2}{ACT\_\allowbreak{}LUT} \\ \hline
+            \verb+$FFA1+ & MMU\_\allowbreak{}IO\_\allowbreak{}CTRL & \bitspan{1}{FLASHDIS\_\allowbreak{}OK} & \bitspan{4}{---} & \bitspan{1}{FLASHDIS} & \bitspan{1}{VEC\_\allowbreak{}RAM} & \bitspan{1}{CONST\_\allowbreak{}RAM} \\ \hline
+            \verb+$FFA8+--\verb+$FFAF+ & MMU\_\allowbreak{}SLOT\_\allowbreak{}0–7 & \bitspan{8}{Block number} \\ \hline
         \end{tabular}
     \end{center}
     \caption{MMU registers}

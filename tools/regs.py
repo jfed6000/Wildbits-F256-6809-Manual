@@ -60,6 +60,8 @@ def load(path):
         if reg["access"] not in ACCESS:
             raise DataError(f"{where}: access must be one of {sorted(ACCESS)}")
         size = reg.get("size", 1)
+        if reg.get("numbered") and (size < 2 or not reg["name"].endswith("_0")):
+            raise DataError(f"{where}: numbered needs size > 1 and a name ending in _0")
         limit = 0x2000 if block is not None else 0x10000
         if not (0 <= reg["addr"] and reg["addr"] + size <= limit):
             raise DataError(f"{where}: address out of range")
@@ -108,6 +110,21 @@ def addr_text(dev, reg):
         return f"\\verb+{first}+"
     last = hexaddr(reg["addr"] + size - 1)
     return f"\\verb+{first}+--\\verb+{last}+"
+
+
+def display_name(reg):
+    """NAME_0 of a numbered register shows as NAME_0–n (one register per byte)."""
+    if reg.get("numbered"):
+        return f"{reg['name']}–{reg['size'] - 1}"
+    return reg["name"]
+
+
+def equate_names(reg):
+    """(name, address) for each equate: one per byte for a numbered register."""
+    if reg.get("numbered"):
+        base = reg["name"][:-1]
+        return [(f"{base}{i}", reg["addr"] + i) for i in range(reg["size"])]
+    return [(reg["name"], reg["addr"])]
 
 
 def mark(text, verified):
@@ -162,7 +179,7 @@ def write_table(dev, out):
     ]
     for reg in dev["reg"]:
         verified = reg.get("verified", False)
-        row = [addr_text(dev, reg), mark(tex_escape(reg["name"]), verified)]
+        row = [addr_text(dev, reg), mark(breakable(tex_escape(display_name(reg))), verified)]
         if reg.get("fields"):
             row += bit_cells(reg)
         else:
@@ -193,7 +210,7 @@ def write_fields(dev, out):
         facts = [addr_text(dev, reg), ACCESS_TEXT[reg["access"]]]
         if "reset" in reg:
             facts.append(f"reset \\verb+{hexaddr(reg['reset'], 2)}+")
-        name = mark(tex_escape(reg["name"]), verified)
+        name = mark(tex_escape(display_name(reg)), verified)
         lines.append(f"    \\item[{name}] ({', '.join(facts)}) {tex_escape(reg.get('desc', ''))}")
         if reg.get("fields"):
             lines.append("    \\begin{description}")
@@ -221,7 +238,8 @@ def write_equates(devices, out):
         lines.append(f"* {dev['title']}{where}")
         for reg in dev["reg"]:
             note = "" if reg.get("verified", False) else "  ; not yet checked against the RTL"
-            lines.append(f"{reg['name']:<20}equ     {hexaddr(reg['addr'])}{note}")
+            for name, addr in equate_names(reg):
+                lines.append(f"{name:<20}equ     {hexaddr(addr)}{note}")
     out.write_text("\n".join(lines) + "\n")
 
 

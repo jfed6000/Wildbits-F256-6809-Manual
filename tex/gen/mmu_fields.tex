@@ -12,5 +12,5 @@
         \item[VEC\_RAM] (bit 1) 1 = 16 bytes of internal RAM replace \$FFF0–\$FFFF (the 6809 vectors), in every LUT. 0 = the vectors come from the block mapped in slot 7.
         \item[CONST\_RAM] (bit 0) 1 = 256 bytes of internal RAM replace \$FD00–\$FDFF, in every LUT. 0 = \$FD00–\$FDFF is ordinary mapped memory.
     \end{description}
-    \item[MMU\_SLOT\_0] (\verb+$FFA8+--\verb+$FFAF+, read/write) Slot registers 0–7: the block each 8 KB slot maps, in the LUT selected by EDIT\_LUT. At reset LUT 0 maps slots 0–7 to blocks 0–7, except slot 7, which maps flash block \$7F (or RAM block 7 after a debug-port RAM boot). Reset doesn't set LUTs 1–3.
+    \item[MMU\_SLOT\_0–7] (\verb+$FFA8+--\verb+$FFAF+, read/write) Slot registers 0–7: the block each 8 KB slot maps, in the LUT selected by EDIT\_LUT. At reset LUT 0 maps slots 0–7 to blocks 0–7, except slot 7, which maps flash block \$7F (or RAM block 7 after a debug-port RAM boot). Reset doesn't set LUTs 1–3.
 \end{description}

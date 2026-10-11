@@ -1,0 +1,108 @@
+# Interrupt controller (fixed I/O, $FE20-$FE2F).
+# RTL: source/IRQ_Controller_Jr.v (both cores; the source bits are packed in lirq0),
+# hooked up in source/TinyVKY2K2_IO_Page0_Devices.v (K2) and
+# source/Jr2 Code/TinyVKY2_IO_Page0_Devices.v (Jr2). Checked 2026-10-11 at RC24.
+# Bit names follow NitrOS-9's defs/wildbits.d.
+
+title    = "Interrupt controller registers"
+label    = "tab:int_reg"
+machines = ["Jr2", "K2"]
+rtl      = "IRQ_Controller_Jr.v"
+
+[[reg]]
+addr     = 0xFE20
+name     = "INT_PENDING_0"
+access   = "RW"
+reset    = 0x00
+verified = true
+desc     = "Group 0 pending flags. A bit reads 1 when its source has raised an interrupt. Write 1 to a bit to clear it; writing 0 leaves it alone."
+fields = [
+  { bits = "7", name = "INT_CARTRIDGE", desc = "Interrupt line on the cartridge connector." },
+  { bits = "6", name = "INT_DMA",       desc = "DMA transfer finished (when enabled in the DMA control register)." },
+  { bits = "5", name = "INT_TIMER_1",   desc = "Timer 1 reached its target value." },
+  { bits = "4", name = "INT_TIMER_0",   desc = "Timer 0 reached its target value." },
+  { bits = "3", name = "INT_PS2_MOUSE", desc = "PS/2 mouse data." },
+  { bits = "2", name = "INT_PS2_KBD",   desc = "PS/2 keyboard data." },
+  { bits = "1", name = "INT_VKY_SOL",   desc = "VICKY start of line: the display reached the line set in the line interrupt registers." },
+  { bits = "0", name = "INT_VKY_SOF",   desc = "VICKY start of frame." },
+]
+
+[[reg]]
+addr     = 0xFE21
+name     = "INT_PENDING_1"
+access   = "RW"
+reset    = 0x00
+verified = true
+desc     = "Group 1 pending flags. Bits 3–1 have no source."
+fields = [
+  { bits = "7", name = "INT_SDC_INS", desc = "An SD card was inserted." },
+  { bits = "6", name = "INT_VIA1",    desc = "VIA 1, which scans the K2's built-in keyboard. Not connected on the Jr2." },
+  { bits = "5", name = "INT_VIA0",    desc = "VIA 0 (the joystick ports)." },
+  { bits = "4", name = "INT_RTC",     desc = "Real-time clock." },
+  { bits = "0", name = "INT_UART",    desc = "The serial port (UART)." },
+]
+
+[[reg]]
+addr     = 0xFE22
+name     = "INT_PENDING_2"
+access   = "RW"
+reset    = 0x00
+verified = true
+desc     = "Group 2 pending flags: the IEC bus lines and the interrupt pins of the network, Wi-Fi and HDMI parts. Bit 7 has no source. The IEC bits can also raise an NMI (see the text)."
+fields = [
+  { bits = "6", name = "INT_HDMI_PIN", desc = "HDMI interface interrupt pin." },
+  { bits = "5", name = "INT_WIFI_PIN", desc = "Wi-Fi module interrupt pin." },
+  { bits = "4", name = "INT_NET_PIN",  desc = "Network module interrupt pin." },
+  { bits = "3", name = "IEC_SREQ_i",   desc = "IEC SREQ line." },
+  { bits = "2", name = "IEC_ATN_i",    desc = "IEC ATN line." },
+  { bits = "1", name = "IEC_CLK_i",    desc = "IEC clock line." },
+  { bits = "0", name = "IEC_DATA_i",   desc = "IEC data line." },
+]
+
+[[reg]]
+addr     = 0xFE23
+name     = "INT_PENDING_3"
+access   = "RW"
+reset    = 0x00
+verified = true
+desc     = "Group 3 pending flags: receive and transmit FIFOs. Bit 4 (INT_MIDI_VS_RX in NitrOS-9) and bits 7–6 have no source on either board."
+fields = [
+  { bits = "5", name = "INT_WIZFI_TX", desc = "The Wi-Fi transmit FIFO became empty." },
+  { bits = "3", name = "INT_WIZNET",   desc = "The WizNet FIFO has data. K2 only." },
+  { bits = "2", name = "INT_OPT_KBD",  desc = "The optical keyboard FIFO has data. K2 only." },
+  { bits = "1", name = "INT_MIDI_RX",  desc = "The MIDI receive FIFO has data." },
+  { bits = "0", name = "INT_WIZFI_RX", desc = "The Wi-Fi receive FIFO has data." },
+]
+
+[[reg]]
+addr     = 0xFE24
+size     = 4
+name     = "INT_POLARITY_0"
+numbered = true
+access   = "RW"
+reset    = 0x00
+verified = true
+cell     = "One bit per source"
+desc     = "Polarity for groups 0–3 ($FE24–$FE27), one bit per source in the same positions as the pending flags. With EDGE, chooses the condition that sets the pending flag."
+
+[[reg]]
+addr     = 0xFE28
+size     = 4
+name     = "INT_EDGE_0"
+numbered = true
+access   = "RW"
+reset    = 0xFF
+verified = true
+cell     = "One bit per source"
+desc     = "Edge select for groups 0–3 ($FE28–$FE2B). 1 = the flag is set by a change of the input; 0 = it is set while the input is at a level."
+
+[[reg]]
+addr     = 0xFE2C
+size     = 4
+name     = "INT_MASK_0"
+numbered = true
+access   = "RW"
+reset    = 0xFF
+verified = true
+cell     = "One bit per source"
+desc     = "Masks for groups 0–3 ($FE2C–$FE2F). 1 = the source can set its pending flag but doesn't interrupt the CPU; 0 = a pending flag interrupts the CPU."

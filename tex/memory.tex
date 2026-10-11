@@ -135,10 +135,8 @@ These examples use the names from \verb+examples/include/wildbits_regs.inc+, whi
 This fragment maps the text color block (\verb+$FF+) into slot 2, fills the screen's colors with white on color 0, and puts RAM block 2 back. It assumes that LUT 0 is both active and being edited, as after reset, and that your program and stack aren't in slot 2.
 
 \begin{verbatim}
-MMU_SLOT_2  equ   MMU_SLOT_0+2      $FFAA: slot 2 = $4000-$5FFF
-
             lda   #$FF              text color block
-            sta   MMU_SLOT_2        slot 2 now shows the color matrix
+            sta   MMU_SLOT_2        slot 2 ($4000-$5FFF) now shows the colors
             ldx   #$4000
             ldd   #$F0F0            foreground 15, background 0
             ldy   #4800/2           4,800 bytes, two at a time
@@ -163,7 +161,7 @@ This fragment fills LUT 1 while LUT 0 keeps running the program, then switches t
             cmpb  #8
             bne   @slots
             lda   #$A0
-            sta   MMU_SLOT_0+3      slot 3 = block $A0
+            sta   MMU_SLOT_3        slot 3 = block $A0
             lda   #$01              make LUT 1 active (and edit LUT 0)
             sta   MMU_MEM_CTRL
 \end{verbatim}

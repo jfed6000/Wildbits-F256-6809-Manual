@@ -36,6 +36,7 @@ fields = [
 addr     = 0xFFA8
 size     = 8
 name     = "MMU_SLOT_0"
+numbered = true
 access   = "RW"
 verified = true
 cell     = "Block number"
