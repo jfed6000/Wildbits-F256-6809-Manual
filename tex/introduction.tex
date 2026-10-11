@@ -1,177 +1,101 @@
 \chapter{Introduction}
+\label{chp:intro}
 
-This manual is meant to be a thorough introduction to the various hardware features of the \jr. In it, I will attempt to explain each of the major subsystems of the \jr\ and provide simple but practical examples of their use.
+This manual describes the hardware of the Wildbits \jrtwo\ and \ktwo\ running the FNX6809 core: what each device does, which registers control it, and how to program it from 6809 assembly language. Each chapter covers one part of the machine and gives working examples.
 
-One thing this manual will not provide is a tutorial in programming the 65C02 processor at the heart of the \jr. There are plenty of excellent books and videos explaining how the processor works and how to do assembly programming. While examples will generally be written in assembly, I will try to annotate them fully so that what is happening is very clear even to the novice assembly language coder.
+The manual doesn't teach 6809 programming. The instruction set is the one used in the Tandy Color Computer, the Dragon and many other machines, and books written for those machines teach it well. The examples are commented so you can follow them if you are still learning.
 
-There are two models of \jr\ available: the \fjr, and the \fk. The \fjr\ is a single board computer, designed to fit within a mini-ITX case, that requires a separate PS/2 keyboard. The \fk\ is a complete system with a case and a built-in custom keyboard. The two versions do have differences but are mostly compatible. Differences between the systems will be clearly noted.
+\section{The machines}
 
-Several of chapters in this manual include example assembly code to show how the various features of the \jr\ work. While the code included in the text should be executable, the complete examples can be found on the Github repository that hosts the manual itself. Most of the examples are able to run on their own, but a few of them expect there to be some sort of operating system providing text display routines compatible with the old Commodore kernel. The examples were all written on a machine using OpenKERNAL, which was written for the \jr, but really anything that provides the CINT and CHROUT calls should work fine. Of course, the examples could be tweaked without too much trouble to run on essentially any operating system.
+The Wildbits \jrtwo\ and \ktwo\ are the main subject of this manual.
 
-\subsection*{A Note on Notation}
+\begin{description}
+    \item[\jrtwo] a single board computer in the mini-ITX format. It needs a PS/2 keyboard, a case and a power supply of your own.
+    \item[\ktwo] a complete computer with a case and a built-in keyboard. It has a few devices the \jrtwo\ lacks: a second VIA that scans the built-in keyboard, an optical keyboard interface, a WizNet network interface, a supervisor microcontroller (an RP2040) and a small logo display.
+\end{description}
 
-Important side notes are called out with a black bar in the margin. These notes generally call out key differences between the different versions of the \jr\ and may have some important considerations for programs targeting multiple platforms.
+Both machines run the same core and share almost all their hardware, so a program written for one runs on the other unless it uses a \ktwo-only device. The text marks every difference.
 
-Example code in this manual is presented as assembly language. While the code is fairly generic 65C02 assembly code, the code was tested using the 64TASS assembler, and there are aspects of its syntax that are worth explaining.
+\begin{note}
+    The same core will be ported to the earlier \fjr\ and \fk. Most of this manual will apply to them, but they have less memory and fewer devices, so check the chapter for the device you use.
+\end{note}
+
+\section{The 6809 and the core}
+
+Most of the machine lives in one FPGA. The core loaded into it, FNX6809, provides a cycle-accurate 6809 CPU along with VICKY, the video controller; the memory management unit (MMU); the sound chips; and most of the I/O devices. Because the CPU is part of the core, you change the CPU by loading a different core; this manual covers the 6809 core only. This edition describes core release RC24 (``Longview'').
+
+The CPU is a 6809, not a 6309: the 6309's extra registers and instructions aren't there. It runs at 6.29~MHz. With turbo mode on, cycles that don't use the bus (the internal cycles of an instruction) run at 12.58~MHz, while every bus cycle keeps its normal timing, so programs run faster without upsetting any device. Turbo mode is on when the first boot-mode DIP switch is on; bit 0 of \verb+$FF90+ then reads 0. \verify{Check the DIP switch labels and the speed-up on both boards.}
+
+The hardware registers are big-endian, like the 6809: a register of two or more bytes keeps its most significant byte at the lowest address. You can load and store 16-bit values with \verb+LDD+ and \verb+STD+, and a 24-bit address is a high byte followed by a 16-bit word.
+
+\section{The parts of the machine}
+
+The CPU addresses 64~KB through the MMU, which maps 8~KB blocks of the 2,016~KB of RAM and the device memory into eight slots. Chapter~\ref{chp:memory} explains the MMU; read it first, because every other chapter depends on it.
+
+The rest of the hardware falls into these groups, each with its own chapter:
+
+\begin{description}
+    \item[Video] VICKY draws text, bitmaps, tiles and sprites, with a mouse pointer and line interrupts. It reads its data straight from RAM, without the CPU.
+    \item[Sound] the FPGA holds SID chips, an SN76489 (the PSG) and an OPL3, mixed through the sound CODEC. \verify{A VS1053b decodes compressed audio, and a SAM2695 synthesizer plays MIDI.}
+    \item[Timing] two timers, the start-of-frame and start-of-line interrupts, and a battery-backed real-time clock.
+    \item[Input] PS/2 keyboard and mouse, two joystick ports through VIA~0, NES and SNES gamepads, and on the \ktwo\ the built-in keyboard.
+    \item[Storage and communication] \verify{two SD card interfaces}, the serial port, the Commodore IEC serial bus, and Wi-Fi through a WizFi360 module.
+    \item[Helpers] a DMA engine for copying and filling memory, integer and floating-point math units, and a random number generator.
+\end{description}
+
+Interrupts from all these devices pass through one interrupt controller (chapter~\ref{chap:interrupts}). The memory map appendix lists every register address.
+
+\section{Raw programs and NitrOS-9}
+
+You can program the machine in two ways, and most chapters give an example of each.
+
+\begin{description}
+    \item[Raw 6809] your program runs on the bare machine, with no operating system. It owns all the hardware: it sets up the MMU, the screen and the interrupts itself. Write this way for games, demos and tests, or to learn how the hardware works.
+    \item[NitrOS-9] your program runs as a process under NitrOS-9 Level 2, a multitasking operating system with files, a shell and device drivers. The system owns the MMU and the interrupt controller, so a program asks the system to map a device block before it touches a register, and it leaves interrupts to the drivers. Most software for these machines runs under NitrOS-9.
+\end{description}
+
+Where NitrOS-9 changes how you use a device, the chapter has a section on it. Use a NitrOS-9 built for the RC24 core: older builds expect the device blocks at different addresses.
+
+\section{The examples}
+
+Complete versions of the examples are in the \verb+examples+ folder of the manual's repository, \url{https://github.com/jfed6000/Wildbits-F256-6809-Manual}. The folder has three parts:
+
+\begin{description}
+    \item[\texttt{examples/raw}] raw programs. Start with \verb+skeleton.asm+, which sets up the machine, clears the screen and prints a message; copy it to begin your own program. Its header explains how to build it and load it.
+    \item[\texttt{examples/nos9}] NitrOS-9 programs. Start with \verb+hello.asm+. The README explains how to build them and copy them to a NitrOS-9 disk image.
+    \item[\texttt{examples/include}] \verb+wildbits_regs.inc+, which defines a name for every register this manual documents. It is generated from the same data as the register tables in this manual, so the names match. NitrOS-9 programs use the names in NitrOS-9's own \verb+wildbits.d+ instead.
+\end{description}
+
+To load a raw program, connect the debug USB port to another computer and use FoenixMgr. Tell the machine to boot from RAM once, then upload the program:
+
+\begin{verbatim}
+fnxmgr --boot ram
+fnxmgr --binary skeleton.bin --address 00E000
+\end{verbatim}
+
+The upload stops the CPU, writes the program into RAM and restarts the CPU, which takes its reset vector from the program. \verb+fnxmgr --boot flash+ returns to the normal boot. Chapter~\ref{chp:memory} explains what the RAM boot changes, and the debug port chapter describes the protocol FoenixMgr uses.
+
+\section{Notation}
+
+Notes that call out a difference between machines, or something easy to get wrong, have a bar in the margin:
+
+\begin{note}
+    Like this.
+\end{note}
+
+Numbers that start with \verb+$+ are hexadecimal, and numbers that start with \verb+%+ are binary; other numbers are decimal. A range of addresses such as \verb+$FE20+--\verb+$FE2F+ includes both ends. A bit is numbered from 0, the least significant bit, and \verb+b7+ means bit 7.
+
+Addresses come in two kinds. A CPU address is one of the 64~KB the 6809 sees, written with four digits (\verb+$FFA0+). A physical address is a place in the machine's memory, written with six digits (\verb+$1F0000+), or as a block number and an offset (block \verb+$FC+, offset \verb+$1700+). The MMU turns one into the other.
+
+The examples use the syntax of lwasm, the assembler in lwtools (\url{http://www.lwtools.ca/}). Anything that assembles 6809 code with Motorola syntax will need few changes. The parts of lwasm syntax the examples use are:
 
 \begin{itemize}
-\item Numeric literals are in decimal unless prefixed by the dollar sign (\$)
-\item There are several math and logical operators that can be used to calculate a numeric literal value at assembly time: \verb|+| adds numbers, \verb+-+ subtracts, \verb+*+ multiplies, \verb+|+ calculates the bitwise OR of two values, and \verb+~+ computes the bitwise NOT or negation of a value.
-\item The \verb+.byte+ directive stores a set of 8-bit values into the assembled code. The directive takes a list of values puts them into the assembled code as bytes.
-\item The \verb+.word+ directive stores a set of 16-bit values into the assembled code. The directive takes a list of values and treats them as 16-bit (even if they are less than 256).
-\item There are special operators for selecting specific bit ranges from a number to allow the assembly code to write the number byte-by-byte. The less than character (\verb+<+) selects bits 0--7. The greater than character (\verb+>+) selects bits 8--15. The back tick character (\verb+`+) selects bits 16--23. For example:
+    \item \verb+label equ value+ gives a name to a number.
+    \item \verb+fcb+ stores bytes, \verb+fdb+ stores 16-bit words (high byte first), \verb+fcc+ stores a string and \verb+rmb+ reserves bytes.
+    \item \verb+org+ sets the address of the code that follows.
+    \item An expression may use \verb|+ - * /|, \verb+&+ (and), \verb+|+ (or), \verb+^+ (exclusive or) and \verb+~+ (complement). For example, \verb+anda #~INT_VKY_SOF+ clears the bit named \verb+INT_VKY_SOF+.
+    \item A label that starts with \verb+@+ is local: it is known only between the two ordinary labels around it.
+    \item Text after the operand, or after a \verb+*+ or \verb+;+ at the start of a line, is a comment.
 \end{itemize}
 
-\begin{Verbatim}[samepage=true]
-    SAMPLE = $123456
-
-    lda #<SAMPLE
-    sta $0800           ; Store $56 to $0800
-    lda #>SAMPLE
-    sta $0801           ; Store $34 to $0801
-    lda #`SAMPLE
-    sta $0802           ; Store $12 to $0802
-\end{Verbatim}
-
-\section*{About the Machine}
-
-\subsection*{F256jr Ports}
-
-The connectors of the back of the \fjr\ from left to right are (see figure:~\ref{fig:rear}):
-
-\begin{description}
-    \item[Audio Line Out] the stereo audio output. These are standard RCA style line level outputs.
-
-    \item[SD Card Slot] for standard SD cards for storage of files and programs.
-
-    \item[DVI Monitor Port] for output to your monitor. This can be connected to the DVI input of a monitor or run through a simple DVI-VGA connector to use with an older VGA input.
-
-    \item[IEC Serial Port] supports the Commodore serial bus. A Commodore disk drive (1541, 1571, 1581, {\it etc.}), a Commodore compatible serial printer, or other device supporting the Commodore serial bus can be connected here.
-\end{description}
-
-\begin{figure}[ht]
-    \begin{center}
-        \includegraphics[scale=0.75]{images/f256_render_annotated_back.pdf}
-    \end{center}
-    \caption{F256jr Rear Connectors}
-    \label{fig:rear}
-\end{figure}
-
-
-The top of the \fjr\ board has several connectors and other features that should be explained (see figure:~\ref{fig:top}):
-
-\begin{description}
-    \item[Power In] this is a standard ITX/ATX style power connector. Pretty much any PC power supply should work here, and a Pico-ATX style power adapter is more than sufficient.
-
-    \item[Debug USB Port] this provides access to the debug interface of the \jr\ for a desktop computer. You can use it to upload data to the \jr's memory or examine the memory. There is a Mini USB B connector on the board, but there is also a header that can be used to connect the USB jack on some cases to the board.
-
-    \item[Case Buttons and LEDs] this collection of headers is used to connect the power and reset button from the case as well as the power LED and SD access LED.
-
-    \item[Joystick Ports] these connectors allow you to plug in Atari style joysticks
-
-    \item[DIP Switches] these switches allow you to manage certain aspects of the \jr. In particular, you can control gamma correction and some boot options, depending on the kernel installed.
-
-    \item[Stereo SIDs] out of the box, these will be bare sockets, but they are where you would install your SID chips or SID emulators. The sockets support the original 6581, the lower voltage 8581, and the different replacements like the SwinSID, ARMSID, and BackSID.
-
-    \item[Wi-Fi Module] this optional module works with the built-in serial port to allow for Wi-Fi access, if a program or operating system supports it.
-
-    \item[RS-232 Port] this IDC header works with a standard IDC to DE-9 adapter cable to provide an RS-232 serial port. The same serial port is used for this port as is used by the Wi-Fi module, so only one of the two can be used at a time.
-
-    \item[GPIO] this header provides access to the I/O pins of the WDC65C22 VIA. The pin assignments are compatible with the Commodore C64 keyboard connector.
-
-    \item[Expansion Port] for future expansion. This is a PCI-E style connector with a custom pinout. In the future, it might be used for memory expansion or other devices.
-
-    \item[Clock Battery] this CR2032 cell holder provides power for the real time clock chip.
-
-    \item[FPGA JTAG Port] this connector is used to apply any future updates to the FPGA. A special adapter would need to be used to connect to this port.
-
-    \item[Gamepad Ports] this header provides access for an NES or SNES style gameport interface.
-
-    \item[Case Audio Port] this header provides access to the headphone and microphone signals to connect to a PC case.
-
-    \item[Headphone Out] this is a standard headphone adapter port that can be used if the case does not provide headphone output.
-\end{description}
-
-\begin{figure}[ht]
-    \begin{center}
-        \includegraphics[scale=0.55]{images/f256_render_annotated_top.pdf}
-    \end{center}
-    \caption{F256jr Top View}
-    \label{fig:top}
-\end{figure}
-
-\subsection*{F256k Ports}
-
-The connectors of the back of the \fk\ from left to right are (see figure:~\ref{fig:rear_k}):
-
-\begin{description}
-	\item[Power Jack] The \fk\ requires a 12 volt DC power supply that can provide at least 2 amps. They are available from several suppliers and should be readily available. The connector needed is a 2.5mm barrel plug with a center-positive connection ({\it i.e.} the outer sleave is ground).
-	
-	\item[USB Debug Port] provides the debug interface through USB
-    
-    \item[PS/2 Mouse Port] provides the PS/2 interface for a mouse
-    
-    \item[FNX4N4S Adapter Port] provides the connections for NES style gamepads, through FNX4N4S adapter module
-    
-    \item[IEC Serial Port] supports the Commodore serial bus. A Commodore disk drive (1541, 1571, 1581, {\it etc.}), a Commodore compatible serial printer, or other device supporting the Commodore serial bus can be connected here.
-
-    \item[DVI Monitor Port] for output to your monitor. This can be connected to the DVI input of a monitor or run through a simple DVI-VGA connector to use with an older VGA input.
-    
-    \item[RS-232 Port] provides a standard RS-232 serial interface
-    
-    \item[Headphone Port] a standard jack for headphones
-
-    \item[Audio Line Out] the stereo audio output. These are standard RCA style line level outputs.
-\end{description}
-
-\begin{figure}[ht]
-    \begin{center}
-        \includegraphics[scale=0.75]{images/f256k_back_annotated.pdf}
-    \end{center}
-    \caption{F256k Rear Connectors}
-    \label{fig:rear_k}
-\end{figure}
-
-The top of the \fk\ board contains a few connectors and jumpers (see figure~\ref{fig:top_k}). Note that, for the \fk, the JTAG port and DIP switches that are on top of the \fjr\ board are on the bottom side of the \fk, and they are accessible without removing the board from the case.
-
-\begin{description}
-    \item[Audio Line-input] this three pin header provides an stereo audio line level input for the CODEC.
-    
-    \item[Wi-Fi Module] this optional module works with the built-in serial port to allow for Wi-Fi access, if a program or operating system supports it.
-
-    \item[Serial Device Selectors] these two three pin headers allow the system to use either the RS-232 port on the back of the board for serial I/O or the optional Wi-Fi module.
-
-    \item[Expansion Port] for future expansion. This is a PCI-E style connector with a custom pinout. In the future, it might be used for memory expansion or other devices.
-
-    \item[Clock Battery] this CR2032 cell holder provides power for the real time clock chip.
-    
-    \item[Atari Style Joysticks] two DE-9 connectors (accessible through the side of the case) provide access for Atari style joysticks.
-   \end{description}
-
-\begin{figure}[ht]
-    \begin{center}
-        \includegraphics[scale=0.55]{images/f256k_top_annotated.pdf}
-    \end{center}
-    \caption{F256k Top View}
-    \label{fig:top_k}
-\end{figure}
-
-\subsection*{System Architecture}
-
-For being so small, the \jr\ has a lot of components to it, so it is worth mapping out the over all structure of the computer. One of the main things to note is that most of what makes the \jr\ the \jr\ is the FPGA TinyVicky. TinyVicky provides the MMU, the various text and graphics engines, most of the I/O devices, controllers for the sound chips, and the controller for the 512KB of SRAM. The CPU, VIA, RTC, flash memory, and expansion RAM are separate from TinyVicky, although TinyVicky is still responsible for translating CPU addresses to the appropriate chip selection logic and bank selection. One of the most important aspects of this architecture is that, while the first 512KB of SRAM is accessible to both the CPU and TinyVicky, TinyVicky cannot access the data in the flash or in any expansion RAM.
-
-\begin{figure}[ht]
-    \begin{center}
-        \includegraphics[scale=0.55]{images/f256jr_layout.pdf}
-    \end{center}
-    \caption{F256jr Internal Architecture}
-    \label{fig:arch}
-\end{figure}
-
-\begin{figure}[ht]
-    \begin{center}
-        \includegraphics[scale=0.55]{images/f256k_layout.pdf}
-    \end{center}
-    \caption{F256k Internal Architecture}
-    \label{fig:f256k_arch}
-\end{figure}
+The raw examples build with \verb+lwasm --6809 --format=raw+, which writes a plain binary image. The NitrOS-9 examples build with \verb+--format=os9+ and the same options as the NitrOS-9 sources; each example's Makefile has the full command.
