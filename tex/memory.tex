@@ -1,135 +1,200 @@
 \chapter{Memory Management}
+\label{chp:memory}
 
-The \jr\ has 512 KB of system RAM which can be used for programs, data, and graphics. It also has 512 KB of read-only flash memory that can be used by whatever operating system is installed. Finally, the \jr\ comes with an expansion port and allows for 256KB of expansion RAM to be added. Now, the 65C02 CPU at the heart of the \jr\ has an address space of only 64 KB, so how can it access all this memory, not to mention the I/O devices on the system? The answer is paging. The \jr\ has a special memory management unit (MMU) that can swap banks of memory or I/O registers into and out of the memory space of the CPU.
+The \jrtwo\ and \ktwo\ have 2 MB of static RAM, 512 KB of flash memory, and a connector for 256 KB of expansion memory. The 6809 can address only 64 KB. To reach the rest, you use the memory management unit (MMU): it divides the CPU's 64 KB into eight slots of 8 KB and lets you choose which 8 KB block of physical memory appears in each slot.
 
-To understand how it all works, we first need to look at how RAM and flash memory are handled by the \jr. Because there are 1,280 KB of total storage on the system, the system has a 21-bit address bus to manage the memory. RAM and flash have address on that 21-bit bus as shown in table~\ref{tab:memory}.
+If you write programs for NitrOS-9, the operating system manages the MMU for you; read section~\ref{sec:mem_nos9} for what that means for your program. If you write raw 6809 programs, read the whole chapter: your program owns the MMU.
+
+\section{Blocks}
+
+The MMU sees physical memory as 256 blocks of 8 KB, numbered \verb+$00+ to \verb+$FF+. A block number is eight bits, and an address within a block is thirteen, so a physical address is 21 bits: the block number times \verb+$2000+, plus the offset.
+
+Most blocks are RAM. Blocks \verb+$40+--\verb+$9F+ depend on the FLASHDIS bit in \verb+MMU_IO_CTRL+ (\verb+$FFA1+): while it is clear, as it is after reset, those blocks are the flash memory and the expansion connector. Set it, and they become RAM too. Blocks \verb+$FC+--\verb+$FF+ are always device memory: VICKY's registers, fonts and color tables, and the text screen. Table~\ref{tab:phys_blocks} shows the layout.
 
 \begin{table}[ht]
-	\begin{center}
-		\begin{tabular}{| l | l | l |} \hline
-			Start & End & Memory Type \\ \hline\hline
-		  	\verb+0x000000+ & \verb+0x07FFFF+ & System RAM (512 KB)\\ \hline
-			\verb+0x080000+ & \verb+0x0FFFFF+ & Flash Memory (512 KB) \\ \hline
-			\verb+0x100000+ & \verb+0x13FFFF+ & Expansion RAM (256 KB)\\ \hline
-		\end{tabular}
-	\end{center}
-	\caption{\jr\ memory layout}
-	\label{tab:memory}
+    \begin{center}
+        \begin{tabular}{|l|l|l|l|} \hline
+            Blocks & Physical addresses & FLASHDIS = 0 (reset) & FLASHDIS = 1 \\ \hline\hline
+            \verb+$00+--\verb+$3F+ & \verb+$000000+--\verb+$07FFFF+ & RAM (512 KB) & RAM \\ \hline
+            \verb+$40+--\verb+$7F+ & \verb+$080000+--\verb+$0FFFFF+ & Flash (512 KB) & RAM \\ \hline
+            \verb+$80+--\verb+$9F+ & \verb+$100000+--\verb+$13FFFF+ & Expansion (256 KB) & RAM \\ \hline
+            \verb+$A0+--\verb+$FB+ & \verb+$140000+--\verb+$1F7FFF+ & RAM (736 KB) & RAM \\ \hline
+            \verb+$FC+--\verb+$FF+ & \verb+$1F8000+--\verb+$1FFFFF+ & Devices & Devices \\ \hline
+        \end{tabular}
+    \end{center}
+    \caption{Physical memory blocks}
+    \label{tab:phys_blocks}
 \end{table}
 
-This memory is divided up into ``banks'' of 8 KB each. The 16-bit address space of the CPU is also divided up into 8 KB banks. The MMU allows the program to assign any bank of system memory to any bank of the CPU's memory. It does this through the use of memory look-up tables (LUT), which provide the upper bits needed to select the bank out of system memory for any given bank in CPU memory. It takes 13 bits to specify an address within 8 KB, which means for a 16-bit address from the CPU, the upper 3 bits are the bank number. Since the system bus is 21 bits, the upper 8 bits are used to address the correct 8 KB bank in the full system memory. So a MLUT must provide a 8-bit system bank number for each 3-bit bank number provided by the CPU. Figure~\ref{fig:mmu_address_xlate} shows the translation of a CPU address to a full system address through the currently selected memory MLUT.
+With FLASHDIS set you have 2,016 KB of RAM in blocks \verb+$00+--\verb+$FB+; with it clear you have 1,248 KB, plus the flash and the expansion memory. FLASHDIS changes only what the CPU sees. VICKY and the DMA engine use physical addresses directly, without the MMU, and always reach RAM at every block from \verb+$00+ to \verb+$FB+.
+
+\begin{note}
+    Older cores have no FLASHDIS bit; their device memory is at blocks \verb+$C0+--\verb+$C3+, and blocks \verb+$A0+--\verb+$FB+ are not all RAM. Bit 7 of \verb+MMU_IO_CTRL+ always reads 1 on a core with FLASHDIS, so your program can test it before setting the bit.
+\end{note}
+
+\section{Slots and LUTs}
+
+The CPU's 64 KB is divided into eight slots (table~\ref{tab:mem_slots}). The top three bits of a CPU address select the slot. The MMU looks up the block number for that slot and puts it in front of the remaining 13 bits to make the physical address (figure~\ref{fig:mmu_address_xlate}, where ``bank'' means slot).
+
+\begin{table}[ht]
+    \begin{center}
+        \begin{tabular}{|c|c|l|} \hline
+            Slot & A15--A13 & CPU addresses \\ \hline\hline
+            0 & 000 & \verb+$0000+--\verb+$1FFF+ \\ \hline
+            1 & 001 & \verb+$2000+--\verb+$3FFF+ \\ \hline
+            2 & 010 & \verb+$4000+--\verb+$5FFF+ \\ \hline
+            3 & 011 & \verb+$6000+--\verb+$7FFF+ \\ \hline
+            4 & 100 & \verb+$8000+--\verb+$9FFF+ \\ \hline
+            5 & 101 & \verb+$A000+--\verb+$BFFF+ \\ \hline
+            6 & 110 & \verb+$C000+--\verb+$DFFF+ \\ \hline
+            7 & 111 & \verb+$E000+--\verb+$FFFF+ \\ \hline
+        \end{tabular}
+    \end{center}
+    \caption{CPU memory slots}
+    \label{tab:mem_slots}
+\end{table}
 
 \begin{figure}[ht]
     \begin{center}
         \includegraphics[scale=0.65]{images/mmu_address_xlate.pdf}
     \end{center}
-    \caption{MMU Address Translation}
+    \caption{MMU address translation}
     \label{fig:mmu_address_xlate}
 \end{figure}
 
-The \jr's MMU supports up to four MLUTs, only one of which is active at any given moment. This allows programs to define four different memory layouts and switch between them quickly, without having to alter a MLUT on the fly.
+The eight block numbers for the eight slots form a look-up table (LUT). The MMU holds four LUTs, so you can keep four complete memory maps and switch between them by writing one register. The ACT\_LUT field of \verb+MMU_MEM_CTRL+ (\verb+$FFA0+) selects the LUT that translates addresses, and the EDIT\_LUT field selects the LUT that the slot registers at \verb+$FFA8+--\verb+$FFAF+ read and write. The two fields are independent: you can build a new map in one LUT while another one runs your program. When EDIT\_LUT and ACT\_LUT are the same, a write to a slot register changes the memory map at once.
 
-\begin{table}[ht]
-	\begin{center}
-		\begin{tabular}{| c | c || c | c | c | c | c | c | c | c |} \hline
-			Bank & A[15..13] & Start & End \\ \hline\hline
-			0 & 000 & \verb+0x0000+ & \verb+0x1FFF+ \\ \hline
-			1 & 001 & \verb+0x2000+ & \verb+0x3FFF+ \\ \hline
-			2 & 010 & \verb+0x4000+ & \verb+0x5FFF+ \\ \hline
-			3 & 011 & \verb+0x6000+ & \verb+0x7FFF+ \\ \hline
-			4 & 100 & \verb+0x8000+ & \verb+0x9FFF+ \\ \hline
-			5 & 101 & \verb+0xA000+ & \verb+0xBFFF+ \\ \hline
-			6 & 110 & \verb+0xC000+ & \verb+0xDFFF+ \\ \hline
-			7 & 111 & \verb+0xE000+ & \verb+0xFFFF+ \\ \hline
-		\end{tabular}
-	\end{center}
-	\caption{CPU Memory Banks}
-	\label{tab:mem_banks}
-\end{table}
+Every slot can hold any block, including a device block. Slot 7 is different only because part of it is fixed, as the next section describes.
 
-Of the eight CPU memory banks, one is special. Bank 6 can be mapped to memory as the rest can, or it can be mapped to I/O registers, which are not memory mapped in the same way as RAM and flash. All I/O devices on the \jr\ therefore live within 0xC000 through 0xDFFF on the CPU, but only if the MMU is set to map I/O to bank 6. There is quite a lot of I/O to access on the \jr, so there are four different banks of I/O registers and memory that can be mapped to bank 6 (see table~\ref{tab:io_banks}). Generally speaking, individual control registers for I/O are located in I/O bank 0, while larger I/O tables are stored in the other I/O banks:
+\section{Fixed addresses}
 
-\begin{table}[ht]
-	\begin{center}
-		\begin{tabular}{| l | l |} \hline
-			I/O Bank & Purpose \\ \hline\hline
-			0 & Low level I/O registers \\ \hline
-			1 & Text display font memory and graphics color MLUTs \\ \hline
-			2 & Text display character matrix \\ \hline
-			3 & Text display color matrix \\ \hline
-		\end{tabular}
-	\end{center}
-	\caption{I/O Banks}
-	\label{tab:io_banks}
-\end{table}
-
-The MMU is controlled through two main registers, which are always at locations 0xFFA0 and 0xFFA1 in the CPU's address space (see table~\ref{tab:mmu_registers}). These registers allow programs to select an active MLUT, edit a MLUT, and control bank 6:
-
-\begin{table}[ht]
-	\begin{center}
-		\begin{tabular}{| c | c | c || c | c | c | c | c | c | c | c |} \hline
-			Address & R/W & Name & 7 & 6 & 5 & 4 & 3 & 2 & 1 & 0 \\ \hline\hline
-			\verb+0xFFA0+ & RW & MMU\_MEM\_CTRL & EDIT\_EN & --- & \multicolumn{2}{|c|}{EDIT\_LUT} & --- & --- & \multicolumn{2}{|c|}{ACT\_LUT} \\ \hline
-			\verb+0xFFA1+ & RW & MMU\_IO\_CTRL & \multicolumn{5}{|c|}{---} & IO\_DISABLE & \multicolumn{2}{|c|}{IO\_PAGE} \\ \hline
-		\end{tabular}
-	\end{center}
-	\caption{MMU Registers}
-	\label{tab:mmu_registers}
-\end{table}
+The top three pages of the CPU's address space behave the same in every LUT:
 
 \begin{description}
-	\item[ACT\_LUT] these two bits specify which MLUT (0--3) is used to translate CPU bus address to system bus addresses.
+    \item[\texttt{\$FE00}--\texttt{\$FFFF}] are I/O registers: the interrupt controller, timers, DMA, serial ports, VICKY's control registers and the rest (see the memory map appendix). The MMU registers are at \verb+$FFA0+--\verb+$FFAF+. Reads and writes in this range never reach the RAM block in slot 7, with one exception: \verb+$FFF0+--\verb+$FFFF+.
 
-	\item[EDIT\_EN] if set (1), this bit allows a MLUT to be edited by the program, and memory addresses 0xFFA8--0xFFAF will be used by the MLUT being edited. If clear (0), those memory locations will be standard memory locations and will be mapped like the rest of bank 0.
+    \item[\texttt{\$FFF0}--\texttt{\$FFFF}] hold the 6809's interrupt and reset vectors. With VEC\_RAM (bit 1 of \verb+MMU_IO_CTRL+) clear, they come from the block in slot 7, like ordinary memory. With VEC\_RAM set, 16 bytes of RAM inside the FPGA replace them, so the vectors stay put whatever block you map into slot 7.
 
-	\item[EDIT\_LUT] if EDIT\_EN is set, these two bits will specify which MLUT (0 - 3) is being edited and will appear in memory addresses 0xFFA8--0xFFAF.
-
-	\item[IO\_DISABLE] if set (1), bank 6 is mapped like any other memory bank. If clear (0), bank 6 is mapped to I/O memory.
-
-	\item[IO\_PAGE] if IO\_DISABLE is clear, these two bits specify which bank of I/O memory (0 - 3) is mapped to bank 6.
+    \item[\texttt{\$FD00}--\texttt{\$FDFF}] are ordinary memory in slot 7 while CONST\_RAM (bit 0 of \verb+MMU_IO_CTRL+) is clear. Set it, and 256 bytes of RAM inside the FPGA replace them in every LUT. Use this page for code and data that must stay visible whatever the MMU maps: interrupt entry code, or a routine that switches LUTs.
 \end{description}
 
-\example{Setting up a MLUT}
+The constant RAM and the vector RAM start with unknown contents. To fill one, set its bit and write to it; with the bit set, your reads and writes go to the internal RAM and the block in slot 7 is untouched.
 
-In this example, we will set up MLUT 1 so that the first six banks of CPU memory map to the first banks of RAM, bank 7 of CPU memory maps to the first bank of flash memory, and bank 6 maps to the first I/O bank.
+\section{Device blocks}
 
-\begin{verbatim}
-    lda #$90      ; Active MLUT = 0, Edit MLUT#1
-    sta $0000
+Blocks \verb+$FC+--\verb+$FF+ hold the larger VICKY memories (table~\ref{tab:device_blocks}). To reach one, map it into a free slot, read or write it, and map the slot's usual block back. The registers inside each block are described in the chapters on text, graphics, sprites and tiles.
 
-    ldx #0        ; Start at bank 0
-l1: txa           ; First 6 banks will just be the first banks of RAM
-    sta $0008,x   ; Set the MLUT mapping for this bank
-    inx           ; Move to the next bank
-    cpx #6        ; Until we get to bank 6
-    bne l1
+\begin{table}[ht]
+    \begin{center}
+        \begin{tabular}{|c|l|l|} \hline
+            Block & Offsets & Contents \\ \hline\hline
+            \verb+$FC+ & \verb+$0000+--\verb+$0BFF+ & Gamma tables (blue, green, red) \\
+                       & \verb+$0C00+--\verb+$0FFF+ & Mouse pointer \\
+                       & \verb+$1000+--\verb+$10FF+ & Bitmap registers \\
+                       & \verb+$1100+--\verb+$11FF+ & Tile registers \\
+                       & \verb+$1200+--\verb+$12FF+ & \verify{Memory text mode registers} \\
+                       & \verb+$1300+--\verb+$16FF+ & Sprite registers \\
+                       & \verb+$1700+--\verb+$173F+ & Text foreground color LUT \\
+                       & \verb+$1740+--\verb+$177F+ & Text background color LUT \\ \hline
+            \verb+$FD+ & \verb+$0000+--\verb+$0FFF+ & Fonts (two sets of 2 KB) \\
+                       & \verb+$1000+--\verb+$1FFF+ & Graphics color LUTs 0--3 (1 KB each) \\ \hline
+            \verb+$FE+ & \verb+$0000+--\verb+$12BF+ & Text screen characters (4,800 bytes) \\ \hline
+            \verb+$FF+ & \verb+$0000+--\verb+$12BF+ & Text screen colors (4,800 bytes) \\ \hline
+        \end{tabular}
+    \end{center}
+    \caption{Device blocks}
+    \label{tab:device_blocks}
+\end{table}
 
-    lda #$40      ; Bank 7 maps to $80000, first bank of flash
-    sta $000f
+\section{The MMU registers}
 
-    stz $0001     ; Bank 6 should be I/O bank 0
+Table~\ref{tab:mmu_registers} shows the MMU registers, and the list after it describes each one.
 
-    lda #$01      ; Turn off MLUT editing, and switch to MLUT#1
-    sta $0000
-\end{verbatim}
+\input{gen/mmu.tex}
+\input{gen/mmu_fields.tex}
 
-\section*{MMU Boot Configuration}
+\section{Reset and boot}
 \label{pg:mmu_boot_config}
 
-While the MMU registers allow the MMU to select one of four memory MLUTs to be used for address translation or to be edited, in fact the \jr's MMU actually has eight MLUTs in two sets of four. At any given time, only one of those sets of four MLUTs is active. One set of MLUTs is the ``boot from RAM'' set, and the other is the ``boot from flash'' set. As the names imply, one set is meant to allow you to boot the \jr\ to run code you have loaded into RAM (useful for development and debugging), while the other is meant to be used to boot up an operating system you have loaded into flash memory (useful for just running programs and playing games).
+Power-up and the reset button both reset the MMU:
 
-When the \jr\ powers on, it initializes the MLUTs in two different ways. The ``boot from RAM'' MLUTs are initialized so the 64KB of CPU address space is simply mapped to the first 64KB of system RAM. The ``boot from flash'' MLUTs are initialized to be the same, except that the last bank of CPU address space (0xE000 -- 0xFFFF) is mapped to the last bank of flash memory (0x07E000 -- 0x07FFFF). After the MLUTs are initialized, the \jr\ checks to see which of the two sets of MLUTs should be used and enables them. The memory MLUTs that are not selected are completely ignored. See figure~\ref{fig:lut_choice} to see how the MLUTs are related and how they are initialized on power up.
+\begin{itemize}
+    \item \verb+MMU_MEM_CTRL+ and \verb+MMU_IO_CTRL+ are \verb+$00+: LUT 0 is active and being edited, FLASHDIS is clear, and the constant RAM and vector RAM are off.
+    \item LUT 0 maps slots 0--6 to RAM blocks 0--6, and slot 7 to flash block \verb+$7F+, the last 8 KB of flash. The CPU fetches its reset vector from \verb+$FFFE+ in that block, so the machine boots from flash.
+    \item LUTs 1--3 keep whatever they held. Set every slot of a LUT before you make it active.
+\end{itemize}
 
-\begin{figure}[ht]
-    \begin{center}
-        \includegraphics[scale=0.65]{images/MemoryLUTSelection.pdf}
-    \end{center}
-    \caption{MMU Boot Configuration}
-    \label{fig:lut_choice}
-\end{figure}
+For development you can boot from RAM instead. The FoenixMgr command \verb+--boot ram+ sends a command over the USB debug port that makes every later reset of the CPU map RAM block 7 into slot 7 instead of flash block \verb+$7F+. Each FoenixMgr upload resets the CPU this way, so it also starts your program. The setting lasts until you send \verb+--boot flash+, power the machine off, or \verify{press the reset button}. Your program then supplies its own vectors at \verb+$FFF0+--\verb+$FFFF+ of block 7. The raw skeleton in \verb+examples/raw+ works this way; its comments describe the steps.
 
-How the \jr\ decides which set of MLUTs to use depends upon the model. For the \fjr\ RevB, there is a jumper that can be used to choose between boot from flash or boot from RAM. For the \fjr\ RevA (the early prototype board) and the \fk, the choice is made through a command sent over the USB debug port.
+\section{Raw 6809 examples}
 
-\begin{note}
-	the memory MLUTs are really just tables stored in RAM in the TinyVicky chip, and apart from the power-up initialization, TinyVicky does not change the MLUTs except when directed by a program. Pressing the RESET button does not re-initialize the MLUTs. This means that a program should not assume the MLUTs are set to any particular value on reset, unless the operating system is initializing the MLUTs. A program running as an operating system or even just taking complete control over the board should always initialize the MLUTs to the values it needs as one of its first tasks. Of course, a complete power cycle of the board will reset the MLUTs, but a program will not always be starting from a complete power cycle.
-\end{note}
+These examples use the names from \verb+examples/include/wildbits_regs.inc+, which the manual's register tables are generated from.
+
+\example{Reaching a device block}
+
+This fragment maps the text color block (\verb+$FF+) into slot 2, fills the screen's colors with white on color 0, and puts RAM block 2 back. It assumes that LUT 0 is both active and being edited, as after reset, and that your program and stack aren't in slot 2.
+
+\begin{verbatim}
+MMU_SLOT_2  equ   MMU_SLOT_0+2      $FFAA: slot 2 = $4000-$5FFF
+
+            lda   #$FF              text color block
+            sta   MMU_SLOT_2        slot 2 now shows the color matrix
+            ldx   #$4000
+            ldd   #$F0F0            foreground 15, background 0
+            ldy   #4800/2           4,800 bytes, two at a time
+@fill       std   ,x++
+            leay  -1,y
+            bne   @fill
+            lda   #2                RAM block 2
+            sta   MMU_SLOT_2        put it back
+\end{verbatim}
+
+\example{Building and switching to a second map}
+
+This fragment fills LUT 1 while LUT 0 keeps running the program, then switches to LUT 1. LUT 1 maps the same blocks as LUT 0 after a RAM boot (0--7), except that slot 3 shows RAM block \verb+$A0+. Keep the slot that holds your running code the same in both LUTs, or the CPU fetches its next instruction from somewhere else.
+
+\begin{verbatim}
+            lda   #$10              edit LUT 1, LUT 0 stays active
+            sta   MMU_MEM_CTRL
+            ldx   #MMU_SLOT_0
+            clrb
+@slots      stb   ,x+               slot n = block n
+            incb
+            cmpb  #8
+            bne   @slots
+            lda   #$A0
+            sta   MMU_SLOT_0+3      slot 3 = block $A0
+            lda   #$01              make LUT 1 active (and edit LUT 0)
+            sta   MMU_MEM_CTRL
+\end{verbatim}
+
+\section{Under NitrOS-9}
+\label{sec:mem_nos9}
+
+NitrOS-9 Level 2 takes over the MMU when it boots:
+
+\begin{itemize}
+    \item It sets FLASHDIS on a core that has it, so all 2,016 KB of RAM is available to the system and to programs.
+    \item It sets CONST\_RAM and VEC\_RAM and keeps its own code in the constant page at \verb+$FD00+ and its vectors in the vector RAM.
+    \item LUT 0 holds the system's map. LUT 1 holds the map of the running process; NitrOS-9 reloads it on every task switch.
+\end{itemize}
+
+Each process gets its own 64 KB address space, built from the blocks NitrOS-9 allocates to it. \verb+$FD00+--\verb+$FFFF+ belong to the system in every process; the I/O registers are still at \verb+$FE00+--\verb+$FFFF+, but your program can't use that range as memory.
+
+Don't write the MMU registers from a NitrOS-9 program: the next task switch undoes your changes, and a wrong slot crashes the system. Ask NitrOS-9 instead. \verb+F$MapBlk+ maps one or more blocks, such as a device block, into a free part of your address space and returns its address; \verb+F$ClrBlk+ unmaps them. \verb+examples/nos9/bgcolor.asm+ uses the two calls to reach the text color LUTs in block \verb+$FC+:
+
+\begin{verbatim}
+            pshs  u                 F$MapBlk returns the address in U
+            ldx   #TEXT_LUT_BLK     block $FC (from wildbits.d)
+            ldb   #1                one block
+            os9   F$MapBlk
+            bcs   fail
+            stu   <mapaddr          the data area is still reachable through DP
+            puls  u
+            ...                     use the block through mapaddr
+            ldu   <mapaddr
+            ldb   #1
+            os9   F$ClrBlk          give the address range back
+\end{verbatim}
+
+Use the block names that NitrOS-9 defines in \verb+wildbits.d+, such as \verb+VICKY_BLK+ and \verb+COLOR_RAM_BLK+, rather than numbers. To get more memory for data, use \verb+F$Mem+ to grow your data area, or \verb+F$AllRAM+ and \verb+F$MapBlk+ to allocate blocks and map them yourself.

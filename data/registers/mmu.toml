@@ -24,12 +24,12 @@ name     = "MMU_IO_CTRL"
 access   = "RW"
 reset    = 0x00
 verified = true
-desc     = "Controls the constant RAM pages and the flash and expansion windows."
+desc     = "Controls the constant RAM pages and the flash and expansion windows. Change it with a read-modify-write, so that you keep the bits other code has set."
 fields = [
   { bits = "7", name = "FLASHDIS_OK", access = "R", desc = "Always reads 1 on a core that implements FLASHDIS. Older cores read back the stored 0." },
   { bits = "2", name = "FLASHDIS",    desc = "1 = blocks $40–$9F are RAM. 0 = blocks $40–$7F are flash and $80–$9F are the expansion connector." },
-  { bits = "1", name = "VEC_RAM",     desc = "1 = internal RAM replaces $FFF0–$FFFF (the 6809 vectors). 0 = the vectors come from the block mapped in slot 7." },
-  { bits = "0", name = "CONST_RAM",   desc = "1 = internal RAM replaces $FD00–$FDFF. 0 = $FD00–$FDFF is ordinary mapped memory." },
+  { bits = "1", name = "VEC_RAM",     desc = "1 = 16 bytes of internal RAM replace $FFF0–$FFFF (the 6809 vectors), in every LUT. 0 = the vectors come from the block mapped in slot 7." },
+  { bits = "0", name = "CONST_RAM",   desc = "1 = 256 bytes of internal RAM replace $FD00–$FDFF, in every LUT. 0 = $FD00–$FDFF is ordinary mapped memory." },
 ]
 
 [[reg]]
@@ -39,4 +39,4 @@ name     = "MMU_SLOT_0"
 access   = "RW"
 verified = true
 cell     = "Block number"
-desc     = "Slot registers 0–7: the block each 8 KB slot maps, in the LUT selected by EDIT_LUT. At reset LUT 0 maps slots 0–7 to blocks 0–7, except slot 7, which maps flash block $7F (or RAM block 7 after a debug-port RAM boot)."
+desc     = "Slot registers 0–7: the block each 8 KB slot maps, in the LUT selected by EDIT_LUT. At reset LUT 0 maps slots 0–7 to blocks 0–7, except slot 7, which maps flash block $7F (or RAM block 7 after a debug-port RAM boot). Reset doesn't set LUTs 1–3."
