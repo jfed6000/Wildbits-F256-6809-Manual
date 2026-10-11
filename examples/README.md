@@ -1,16 +1,12 @@
 # Examples
 
-This folder contains complete, runnable programs based on the examples in the text.
+Complete, runnable 6809 programs for the Wildbits F256 Jr2 and K2, based on the examples in the manual. Assemble them with [lwtools](http://www.lwtools.ca/) (`lwasm`).
 
-* [MMU and Text](mmu_text) -- Showing how to use the MMU and the text screen.
-* [Bitmaps](ex_bitmaps) -- Showing how to use a bitmapped display
-* [Sprites](ex_sprites) -- How to use the sprite graphics engine
-* [Tiles](ex_tiles) -- How to use the tile graphics engine
-* [Tiles8](ex_tiles8) -- The tile example using 8x8 tiles
-* [Interrupts](ex_interrupts) -- Using interrupt and the start-of-frame interrupt
-* [SOL](ex_sol) -- How to use get an interrupt for a particular line of the display
-* [SID](ex_sid) -- How to make sound using installed SID chips
-* [PSG](ex_psg) -- How to make sound using the built-in PSG audio
-* [VIA](ex_via) -- Using the VIA to read the joystick port
-* [RTC](ex_rtc) -- Using the real time clock
-* [DMA](ex_dma) -- Using the DMA engine to fill the screen and draw a filled rectangle
+* [raw](raw) -- programs that run on the bare machine, without an operating system. Start with [skeleton.asm](raw/skeleton.asm), which sets up the machine, clears the text screen and prints a message. Its header explains how to build it and load it with FoenixMgr.
+* [include](include) -- shared include files. `wildbits_regs.inc` holds the register addresses. It is generated from `data/registers` by `tools/regs.py`, so don't edit it by hand.
+
+NitrOS-9 versions of the examples will go in `nos9`.
+
+Run `make examples` in the top folder to assemble everything. `make examples LWASM=/path/to/lwasm` picks a different assembler.
+
+The 6502 examples from the old Foenix manual were removed. They are still in the git history, under the `foenix-final` tag.
