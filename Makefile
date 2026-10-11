@@ -3,7 +3,8 @@
 #   make           register tables, examples and the draft PDF
 #   make release   PDF that fails if any \verify{} text is left
 #   make regs      regenerate tables and equates from data/registers
-#   make examples  assemble the examples (LWASM=... picks the assembler)
+#   make examples  assemble the examples (LWASM=... picks the assembler;
+#                  the NitrOS-9 examples need NITROS9DIR=... as well)
 
 MAIN = f256jr_6809_ref
 
@@ -21,9 +22,15 @@ release: regs
 
 examples: regs
 	$(MAKE) -C examples/raw
+ifdef NITROS9DIR
+	$(MAKE) -C examples/nos9
+else
+	@echo "Skipping examples/nos9: set NITROS9DIR to a NitrOS-9 tree to build them"
+endif
 
 clean:
 	cd tex && latexmk -c $(MAIN).tex
 	$(MAKE) -C examples/raw clean
+	$(MAKE) -C examples/nos9 clean
 
 .PHONY: all regs pdf release examples clean

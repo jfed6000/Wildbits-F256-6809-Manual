@@ -1,0 +1,12 @@
+* defsfile - definitions for the NitrOS-9 Level 2 examples
+*
+* Each example starts with "use defsfile". lwasm finds this file because it
+* sits next to the source. The .d files come from the NitrOS-9 tree's defs
+* folder (NITROS9DIR/defs, passed to lwasm with --includedir).
+
+Level               equ       2
+
+                    use       os9.d               system calls, module types, error codes
+                    use       scf.d               terminal (SCF) definitions
+                    use       rbf.d               disk (RBF) definitions
+                    use       wildbits.d          Jr2/K2 hardware: block numbers, registers

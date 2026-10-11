@@ -10,3 +10,6 @@ docs/*.docx
 .DS_Store
 examples/raw/*.bin
 examples/raw/*.lst
+examples/nos9/build/
+examples/**/*.map
+examples/**/*.list
